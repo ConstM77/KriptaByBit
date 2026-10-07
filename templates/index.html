@@ -1,0 +1,199 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bybit Trading Bot Panel</title>
+
+    <!-- 👁️ ДОБАВЛЯЕМ ВСЕВИДЯЩЕЕ ОКО НА ВКЛАДКУ СТРАНИЦЫ (FAVICON) 👁️ -->
+    <link rel="icon" type="image/png" href="https://icons8.com">
+
+    <!-- Стабильный российский CDN Яндекса для стилей -->
+    <link href="https://yastatic.net" rel="stylesheet">
+    <style>
+        body {
+            background-color: #121214;
+            color: #e4e6eb;
+        }
+
+        .card {
+            background-color: #1a1a1e;
+            border: 1px solid #2f2f35;
+            color: white;
+        }
+
+        .form-control, .form-select {
+            background-color: #252529;
+            border: 1px solid #3a3a40;
+            color: white;
+        }
+
+        #log-container {
+            background-color: #0c0c0e;
+            height: 430px;
+            overflow-y: scroll;
+            font-family: monospace;
+            font-size: 13px;
+            border: 1px solid #2f2f35;
+            padding: 10px;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            border-bottom: 1px solid #19191d;
+            padding-bottom: 2px;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 15px;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <!-- И в заголовок тоже добавим Око для атмосферы! -->
+        <h2 class="mb-4 text-warning">👁️ Панель управления Bybit Grid-Ботом (Testnet)</h2>
+
+        <!-- КАРТОЧКИ СТАТИСТИКИ -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="card stat-card bg-dark border-success">
+                    <span class="text-secondary small uppercase">Выполнено сделок</span>
+                    <h3 id="stat-deals" class="text-success m-0">Покупки: 0 | Продажи: 0</h3>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card stat-card bg-dark border-info">
+                    <span class="text-secondary small">Завершено циклов (Grid)</span>
+                    <h3 id="stat-cycles" class="text-info m-0">0</h3>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card stat-card bg-dark border-warning">
+                    <span class="text-secondary small">Чистая прибыль (Profit)</span>
+                    <h3 id="stat-profit" class="text-warning m-0">0.0000 USDT</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <!-- Блок настроек -->
+            <div class="col-md-5">
+                <div class="card p-4 shadow-sm h-100">
+                    <h4 class="mb-3 text-secondary">Параметры стратегии</h4>
+                    <form id="bot-config-form">
+                        <div class="mb-2">
+                            <label class="form-label small">API Key</label>
+                            <input type="text" class="form-control form-control-sm" name="api_key" value="{{ config.API_KEY }}" required>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">API Secret</label>
+                            <input type="password" class="form-control form-control-sm" name="api_secret" value="{{ config.API_SECRET }}" required>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small">Торговая пара</label>
+                                <input type="text" class="form-control form-control-sm" name="symbol" value="{{ config.SYMBOL }}">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">Режим рынка</label>
+                                <select class="form-select form-select-sm" name="trade_mode">
+                                    <option value="spot" selected>SPOT (Маржа 3х)</option>
+                                    <option value="futures">FUTURES</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-4">
+                                <label class="form-label small">Плечо (фьюч)</label>
+                                <input type="text" class="form-control form-control-sm" name="leverage" value="{{ config.LEVERAGE }}">
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small">Объем ордера</label>
+                                <input type="number" step="0.001" class="form-control form-control-sm" name="order_qty" value="{{ config.ORDER_QTY }}">
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small">Уровни сетки</label>
+                                <input type="number" class="form-control form-control-sm" name="grid_levels" value="{{ config.GRID_LEVELS }}">
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label small">Чистый профит с шага (0.003 = 0.3%)</label>
+                            <input type="number" step="0.001" class="form-control form-control-sm" name="profit_pct" value="{{ config.DESIRED_PROFIT_PCT }}">
+                        </div>
+
+                        <div class="d-flex gap-2 mt-auto">
+                            <button type="button" id="start-btn" class="btn btn-success w-50">Запустить</button>
+                            <button type="button" id="stop-btn" class="btn btn-danger w-50 disabled">Остановить</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Блок консоли логов -->
+            <div class="col-md-7">
+                <div class="card p-4 shadow-sm h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="m-0 text-secondary">Логи торговых сессий</h4>
+                        <span id="status-badge" class="badge bg-secondary">Отключен</span>
+                    </div>
+                    <div id="log-container"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+            const logContainer = document.getElementById('log-container');
+
+            function updateDashboard() {
+                fetch('/logs')
+                    .then(res => res.json())
+                    .then(data => {
+                        logContainer.innerHTML = '';
+                        data.logs.forEach(log => {
+                            const div = document.createElement('div');
+                            div.className = 'log-entry';
+                            if (log.includes('ERROR')) div.style.color = '#ff6b6b';
+                            else if (log.includes('🔥')) div.style.color = '#ff9f43';
+                            else if (log.includes('🟢')) div.style.color = '#1dd1a1';
+                            div.innerText = log;
+                            logContainer.appendChild(div);
+                        });
+                    }).catch(err => console.log("Ошибка логов:", err));
+
+                fetch('/stats')
+                    .then(res => res.json())
+                    .then(data => {
+                        document.getElementById('stat-deals').innerText = `Бай: ${data.buy_count} | Селл: ${data.sell_count}`;
+                        document.getElementById('stat-cycles').innerText = data.cycles_completed;
+                        document.getElementById('stat-profit').innerText = `${data.total_profit_usdt.toFixed(4)} USDT`;
+                    }).catch(err => console.log("Ошибка статистики:", err));
+            }
+
+            setInterval(updateDashboard, 1500);
+
+            document.getElementById('start-btn').onclick = function() {
+                const formData = new FormData(document.getElementById('bot-config-form'));
+                fetch('/start', { method: 'POST', body: formData }).then(() => {
+                    document.getElementById('start-btn').classList.add('disabled');
+                    document.getElementById('stop-btn').classList.remove('disabled');
+                    document.getElementById('status-badge').className = "badge bg-success";
+                    document.getElementById('status-badge').innerText = "Работает";
+                });
+            };
+
+            document.getElementById('stop-btn').onclick = function() {
+                fetch('/stop', { method: 'POST' }).then(() => {
+                    document.getElementById('stop-btn').classList.add('disabled');
+                    document.getElementById('start-btn').classList.remove('disabled');
+                    document.getElementById('status-badge').className = "badge bg-secondary";
+                    document.getElementById('status-badge').innerText = "Отключен";
+                });
+            };
+    </script>
+</body>
+</html>
+
