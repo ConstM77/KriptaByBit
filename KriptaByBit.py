@@ -224,19 +224,13 @@ def get_stats():
     return jsonify(STATS)
 
 # 🌟 ЗАМЕНИТЕ САМЫЙ КОНЕЦ ФАЙЛА app.py НА ЭТОТ ВАРИАНТ 🌟
-if __name__ == '__main__':
-    from wsgiref.simple_server import make_server
-    
-    print("\n" + "="*50)
-    print("👁️ СЕРВЕР ВСЕВИДЯЩЕГО ОКА ПРИНУДИТЕЛЬНО ЗАПУЩЕН!")
-    print("👉 Откройте в браузере: http://127.0.0.1:8080")
-    print("="*50 + "\n")
-    
-    # Запускаем сервер через низкоуровневый WSGI-сервер, который заблокирует поток от закрытия
-    server = make_server('0.0.0.0', 8080, app)
-    
-    try:
-        server.serve_forever() # Бесконечный цикл удержания процесса
-    except KeyboardInterrupt:
-        print("\n🛑 Сервер остановлен пользователем.")
+import os # Добавьте импорт наверх файла, если его нет
 
+if __name__ == '__main__':
+    # Amvera передает нужный порт через переменную среды PORT
+    port = int(os.environ.get("PORT", 8080)) 
+    
+    from wsgiref.simple_server import make_server
+    print(f"👁️ Сервер Ока запущен на порту {port}")
+    server = make_server('0.0.0.0', port, app)
+    server.serve_forever()
